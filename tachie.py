@@ -12,12 +12,28 @@ from PyQt5.QtGui import QMovie, QPixmap, QPainter, QImage
 logger = logging.getLogger(__name__)
 
 
+# 获取正确的资源路径 for PyInstaller
+def resource_path(relative_path):
+    """ 获取资源的绝对路径 """
+    try:
+        # PyInstaller创建临时文件夹并将路径存储在_MEIPASS中
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+
 class TachieManager:
     """管理角色立绘资源的类"""
     def __init__(self, base_dir="images/apeiria", base_image_name="CH01_01_00", image_size=(300, 500)):
         """初始化TachieManager"""
         self.base_dir = base_dir
         self.base_image_name = base_image_name
+
+        # PyInstaller打包后，资源路径会发生变化，需要使用resource_path函数获取正确的路径
+        self.base_dir = resource_path(self.base_dir)
+
         self.image_size = image_size # (width, height)
         self.current_base = "normal"  # 默认基础姿势
         self.current_emotion = "普通"      # 默认表情
