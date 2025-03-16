@@ -182,6 +182,17 @@ class TachieManager:
 
         return self.get_scaled_image(result)
     
+    def get_head_image(self, head_location: float = 0.3):
+        """获取角色头部图像, head_location为头部下端位置比例"""
+        composite_image = self.get_composite_image()
+
+        # crop head
+        head_height = int(composite_image.height() * head_location)
+        head_pixmap = composite_image.copy(0, 0, composite_image.width(), head_height)
+
+        return head_pixmap
+
+    
     def get_available_bases(self):
         """获取所有可用的基础姿势"""
         return self.available_bases
