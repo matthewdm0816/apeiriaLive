@@ -109,18 +109,12 @@ class AnimeCharacter(QMainWindow, HotkeyExitMixin):
             rotated_pixmap = head_pixmap.transformed(transform, Qt.SmoothTransformation)
             
             pixmap = rotated_pixmap
-            pixmap = self.tachie_manager.get_composite_image()
+            # pixmap = self.tachie_manager.get_composite_image()
+
+            return pixmap.size()
         
         # 缩放图像到合理大小
         if not pixmap.isNull():
-            # 缩放
-            # max_width = 300
-            # max_height = 500
-            
-            # scaled_pixmap = pixmap.scaled(max_width, max_height, 
-            #                             Qt.KeepAspectRatio, 
-            #                             Qt.SmoothTransformation)
-            
             self.character_label.setPixmap(pixmap)
             self.character_label.setFixedSize(pixmap.size())
             return pixmap.size()
@@ -160,9 +154,10 @@ class AnimeCharacter(QMainWindow, HotkeyExitMixin):
     def mouseDoubleClickEvent(self, event):
         """双击左键折叠到右侧"""
         if event.button() == Qt.LeftButton:
-            if self.current_state == self.COLLAPSED:
-                self.expand()
-            else:
+            # if self.current_state == self.COLLAPSED:
+            #     self.expand()
+            # else:
+            if self.current_state == self.NORMAL:
                 self.collapse_to_right()  # 折叠到右侧
         event.accept()
     
@@ -245,38 +240,60 @@ class AnimeCharacter(QMainWindow, HotkeyExitMixin):
             
             event.accept()
     
-    def collapse_to_left(self):
-        """折叠到屏幕左侧"""
-        if self.current_state != self.COLLAPSED:
-            logger.info("折叠角色到左侧")
-            self.animation.setStartValue(self.geometry())
-            collapsed_width = 50  # 折叠时的宽度
-            self.animation.setEndValue(QRect(0, self.y(), collapsed_width, self.height()))
-            self.animation.start()
-            self.current_state = self.COLLAPSED
-            self.update_character_display()
-    
     def collapse_to_right(self):
-        """折叠到屏幕右侧"""
+        """折叠到屏幕右侧，旋转90度并只显示头部"""
         if self.current_state != self.COLLAPSED:
             logger.info("折叠角色到右侧")
-            self.animation.setStartValue(self.geometry())
-            collapsed_width = 50  # 折叠时的宽度
-            self.animation.setEndValue(QRect(self.screen_geometry.width() - collapsed_width, 
-                                           self.y(), collapsed_width, self.height()))
-            self.animation.start()
+            
+            # 先切换状态，以便update_character_display生成正确的折叠图像
             self.current_state = self.COLLAPSED
-            self.update_character_display()
+            
+            # 获取折叠后的图像尺寸
+            collapsed_size = self.update_character_display()
+            collapsed_width = collapsed_size.width()
+            collapsed_height = collapsed_size.height()
+            
+            # 设置动画
+            self.animation.setStartValue(self.geometry())
+            
+            # 计算折叠后的位置：右侧，垂直居中
+            right_x = self.screen_geometry.width() - collapsed_width
+            # 保持当前的y坐标，但确保不超出屏幕底部
+            current_y = self.y()
+            if current_y + collapsed_height > self.screen_geometry.height():
+                current_y = self.screen_geometry.height() - collapsed_height
+            
+            self.animation.setEndValue(QRect(right_x, current_y, collapsed_width, collapsed_height))
+            self.animation.start()
     
     def expand(self):
         """从折叠状态展开"""
         if self.current_state == self.COLLAPSED:
             logger.info("展开角色")
-            self.animation.setStartValue(self.geometry())
-            self.animation.setEndValue(QRect(self.x(), self.y(), 300, 500))  # 调整为原始大小
-            self.animation.start()
+            # 先切换状态
             self.current_state = self.NORMAL
-            self.update_character_display()
+            
+            # 获取展开后的图像尺寸
+            normal_size = self.update_character_display()
+            
+            # 设置动画
+            self.animation.setStartValue(self.geometry())
+            
+            # 计算展开后的位置：保持在右侧，但调整y坐标使其不超出屏幕
+            right_x = self.screen_geometry.width() - normal_size.width()
+            current_y = self.y()
+            
+            # 由于旋转了90度，展开后的位置需要调整
+            # 尝试保持头部在相同位置
+            adjusted_y = current_y - (normal_size.height() // 3)
+            if adjusted_y < 0:
+                adjusted_y = 0
+            if adjusted_y + normal_size.height() > self.screen_geometry.height():
+                adjusted_y = self.screen_geometry.height() - normal_size.height()
+            
+            self.animation.setEndValue(QRect(right_x, adjusted_y, 
+                                        normal_size.width(), normal_size.height()))
+            self.animation.start()
 
     def show_random_dialog(self):
         """显示随机对话"""

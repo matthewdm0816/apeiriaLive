@@ -3,9 +3,11 @@ import sys
 import logging
 import re
 from typing import List, Dict, Any, Union, Tuple, Dict, Optional, Callable
+import cv2
+import numpy as np
 
 from PyQt5.QtCore import Qt, QPropertyAnimation, QRect, QTimer
-from PyQt5.QtGui import QMovie, QPixmap, QPainter
+from PyQt5.QtGui import QMovie, QPixmap, QPainter, QImage
 
 logger = logging.getLogger(__name__)
 
@@ -94,13 +96,57 @@ class TachieManager:
         return False
     
     def get_scaled_image(self, pixmap, width=None, height=None):
-        """缩放图像"""
+        """缩放图像，先移除透明区域再缩放"""
         if width is None:
             width = self.image_size[0]
         if height is None:
             height = self.image_size[1]
-            
-        return pixmap.scaled(width, height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        
+        # 将QPixmap转换为OpenCV格式
+        qimg = pixmap.toImage()
+        
+        # 获取图像尺寸和格式
+        img_width = qimg.width()
+        img_height = qimg.height()
+        
+        # 创建numpy数组来存储图像数据
+        ptr = qimg.constBits()
+        ptr.setsize(qimg.byteCount())
+        arr = np.array(ptr).reshape(img_height, img_width, 4)
+        
+        # 提取alpha通道
+        alpha = arr[:, :, 3]
+        
+        # 找到非透明区域
+        non_transparent = alpha > 0
+        
+        # 如果图像完全透明，返回原始缩放
+        if not np.any(non_transparent):
+            return pixmap.scaled(width, height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        
+        # 找到非透明区域的边界
+        rows = np.any(non_transparent, axis=1)
+        cols = np.any(non_transparent, axis=0)
+        
+        # 获取非零区域的索引
+        y_indices = np.where(rows)[0]
+        x_indices = np.where(cols)[0]
+        
+        # 确保有非透明像素
+        if len(y_indices) == 0 or len(x_indices) == 0:
+            return pixmap.scaled(width, height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        
+        y_min, y_max = y_indices[[0, -1]]
+        x_min, x_max = x_indices[[0, -1]]
+        
+        # 裁剪原始QImage
+        cropped_qimg = qimg.copy(x_min, y_min, x_max - x_min + 1, y_max - y_min + 1)
+        
+        # 转换回QPixmap
+        cropped_pixmap = QPixmap.fromImage(cropped_qimg)
+        
+        # 缩放裁剪后的图像
+        return cropped_pixmap.scaled(width, height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
     
     def get_composite_image(self):
         """生成组合图像（基础姿势+表情差分）"""

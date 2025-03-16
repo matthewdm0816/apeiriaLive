@@ -93,7 +93,7 @@ class DialogBoxConfig:
         
         # 动画配置
         self.text_animation_speed = 30  # 毫秒/字符
-        self.cursor_blink_interval = 500  # 光标闪烁间隔(毫秒)
+        self.cursor_blink_interval = 750  # 光标闪烁间隔(毫秒)
         self.size_animation_duration = 100  # 大小变化动画持续时间(毫秒)
         
         # 光标配置
@@ -153,6 +153,7 @@ class DialogBox(QDialog):
         # 创建文本标签
         self.label = QLabel("")
         self.label.setWordWrap(True)
+        self.label.setTextFormat(Qt.RichText)
         self.label.setStyleSheet(self.config.text_style)
         # 设置文本标签不裁剪内容
         self.label.setAttribute(Qt.WA_TranslucentBackground)
@@ -294,13 +295,7 @@ class DialogBox(QDialog):
             self.char_index += 1
             
             # 更新标签文本（带光标）
-            if self.config.cursor_enabled:
-                if self.cursor_visible:
-                    self.label.setText(self.current_text + self.config.cursor_char)
-                else:
-                    self.label.setText(self.current_text)
-            else:
-                self.label.setText(self.current_text)
+            self.label.setText(self.get_text_with_cursor())
             
             # 根据文本长度调整对话框高度
             self.resize_dialog()
@@ -349,10 +344,18 @@ class DialogBox(QDialog):
         
         # 如果文字动画已经结束，手动更新光标
         if self.char_index >= len(self.full_text):
+            self.label.setText(self.get_text_with_cursor())
+    
+    def get_text_with_cursor(self):
+        """获取当前文本和光标字符"""
+        if self.config.cursor_enabled:
             if self.cursor_visible:
-                self.label.setText(self.current_text + self.config.cursor_char)
+                return self.current_text + self.config.cursor_char
             else:
-                self.label.setText(self.current_text)
+                invisible_cursor = f"<span style='color:rgba(0,0,0,0);'>{self.config.cursor_char}</span>"
+                return self.current_text + invisible_cursor
+        else:
+            return self.current_text
     
     def speak(self, text, voice_file=None):
         """文本转语音功能（未来扩展）"""
