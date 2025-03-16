@@ -2,7 +2,7 @@ from typing import List, Dict, Any, Union, Tuple, Dict, Optional
 import logging
 
 from PyQt5.QtWidgets import (QDialog, QLabel, QVBoxLayout, QPushButton, 
-                            QGraphicsDropShadowEffect, QSizePolicy)
+                            QGraphicsDropShadowEffect, QSizePolicy, QWidget)
 from PyQt5.QtCore import Qt, QTimer, QSize, QPropertyAnimation, QRect
 from PyQt5.QtGui import QColor, QPainter, QPen, QBrush, QPainterPath
 
@@ -86,12 +86,15 @@ class DialogBoxConfig:
             color: #000000; 
             background-color: transparent;
             padding: 5px;
+            QLabel {
+                background: transparent;
+            }
         """
         
         # 动画配置
         self.text_animation_speed = 30  # 毫秒/字符
         self.cursor_blink_interval = 500  # 光标闪烁间隔(毫秒)
-        self.size_animation_duration = 200  # 大小变化动画持续时间(毫秒)
+        self.size_animation_duration = 100  # 大小变化动画持续时间(毫秒)
         
         # 光标配置
         self.cursor_char = "▌"  # 光标字符
@@ -126,27 +129,43 @@ class DialogBox(QDialog):
         # 设置无边框和透明背景
         self.setAttribute(Qt.WA_TranslucentBackground)
         
-        # 创建主布局
-        self.layout = QVBoxLayout(self)
-        # 增加上边距，避免文本与标题重叠
-        self.layout.setContentsMargins(self.config.padding, 
-                                    #   self.config.padding + self.config.title_height + 5, 
-                                      self.config.padding + 5,
-                                      self.config.padding, 
-                                      self.config.padding)
+        # 创建主布局 - 使用绝对定位
+        self.setLayout(QVBoxLayout())
+        self.layout().setContentsMargins(0, 0, 0, 0)
+        
+        # 创建一个容器widget来包含文本和按钮
+        self.container = QWidget(self)
+        self.container.setObjectName("container")
+        self.container.setStyleSheet("background: transparent;")
+        
+        # 设置容器为绝对定位
+        self.container.setGeometry(
+            self.config.padding, 
+            self.config.title_height + 10,  # 固定在分隔线下方10px
+            self.config.min_width - 2 * self.config.padding, 
+            self.config.min_height - self.config.title_height - 10
+        )
+        
+        # 容器内使用垂直布局
+        container_layout = QVBoxLayout(self.container)
+        container_layout.setContentsMargins(5, 5, 5, 5)
         
         # 创建文本标签
-        self.label = QLabel("", self)
+        self.label = QLabel("")
         self.label.setWordWrap(True)
         self.label.setStyleSheet(self.config.text_style)
-        self.layout.addWidget(self.label)
+        # 设置文本标签不裁剪内容
+        self.label.setAttribute(Qt.WA_TranslucentBackground)
+        self.label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+
+        container_layout.addWidget(self.label, 1)  # 1表示可以拉伸
         
         # 关闭按钮
         self.close_button = QPushButton(self.config.close_button_text)
         self.close_button.clicked.connect(self.close)
         self.close_button.setStyleSheet(self.config.button_style)
         self.close_button.setFixedHeight(self.config.close_button_height)
-        self.layout.addWidget(self.close_button)
+        container_layout.addWidget(self.close_button)
         
         # 设置阴影效果
         if self.config.shadow_enabled:
@@ -177,11 +196,24 @@ class DialogBox(QDialog):
         self.size_animation.setDuration(self.config.size_animation_duration)
         
         # 初始大小 - 增加高度以适应标题栏
-        self.current_height = self.config.min_height # + self.config.title_height + 10
+        # self.current_height = self.config.min_height + self.config.title_height
+        # current height shall add one line of text
+        self.current_height = self.config.min_height + self.config.title_height
         self.resize(self.config.min_width, self.current_height)
         
         # 开始文字动画
         self.setText(text)
+    
+    def resizeEvent(self, event):
+        """窗口大小改变时调整容器大小"""
+        super().resizeEvent(event)
+        # 调整容器大小以适应窗口
+        self.container.setGeometry(
+            self.config.padding, 
+            self.config.title_height + 10,  # 固定在分隔线下方10px
+            self.width() - 2 * self.config.padding, 
+            self.height() - self.config.title_height - self.config.padding - 10
+        )
     
     def paintEvent(self, event):
         """自定义绘制对话框外观"""
@@ -248,18 +280,13 @@ class DialogBox(QDialog):
         self.text_timer.stop()
         
         # 重置对话框大小 - 考虑标题栏高度
-        initial_height = self.config.min_height # + self.config.title_height + 10
+        initial_height = self.config.min_height + self.config.title_height
         self.resize(self.config.min_width, initial_height)
         self.current_height = initial_height
         
         # 开始新的动画
         self.text_timer.start(self.config.text_animation_speed)
 
-    def get_adjusted_total_height(self, text_height: int) -> int:
-        """获取调整后的总高度"""
-        total_height = text_height + self.config.title_height + self.close_button.height() + 10
-        return max(self.config.min_height + self.config.title_height + 10, total_height)
-    
     def update_text(self):
         """更新文本显示，逐字添加"""
         if self.char_index < len(self.full_text):
@@ -276,20 +303,42 @@ class DialogBox(QDialog):
                 self.label.setText(self.current_text)
             
             # 根据文本长度调整对话框高度
-            # 计算文本所需高度
-            text_height = self.label.heightForWidth(self.config.min_width - 40)
-            new_height = self.get_adjusted_total_height(text_height)
-            
-            if new_height > self.current_height:
-                # 动画调整对话框大小
-                self.size_animation.setStartValue(self.geometry())
-                new_rect = QRect(self.x(), self.y(), self.width(), new_height)
-                self.size_animation.setEndValue(new_rect)
-                self.size_animation.start()
-                self.current_height = new_height
+            self.resize_dialog()
         else:
             # 动画结束
             self.text_timer.stop()
+
+    def resize_dialog(self):
+        """调整对话框大小以适应文本"""
+        # 计算文本所需高度 - 始终考虑光标字符的宽度
+        text_for_height_calc = self.current_text
+        
+        # 如果启用了光标，在计算高度时始终添加光标字符
+        # 这样可以避免光标闪烁导致高度变化
+        if self.config.cursor_enabled:
+            text_for_height_calc += self.config.cursor_char
+        
+        # 创建临时QLabel来计算确切高度，避免闪烁问题
+        temp_label = QLabel()
+        temp_label.setWordWrap(True)
+        temp_label.setStyleSheet(self.config.text_style)
+        temp_label.setText(text_for_height_calc)
+        temp_label.setFixedWidth(self.width() - 2 * self.config.padding - 10)
+        
+        # 获取实际需要的高度
+        text_height = temp_label.sizeHint().height()
+        
+        # 计算对话框总高度
+        new_height = text_height + self.config.title_height + self.close_button.height() + 50
+        new_height = max(self.config.min_height + self.config.title_height + 10, new_height)
+        
+        if new_height > self.current_height:
+            # 动画调整对话框大小
+            self.size_animation.setStartValue(self.geometry())
+            new_rect = QRect(self.x(), self.y(), self.width(), new_height)
+            self.size_animation.setEndValue(new_rect)
+            self.size_animation.start()
+            self.current_height = new_height
     
     def toggle_cursor(self):
         """切换光标可见性"""
@@ -332,16 +381,8 @@ class DialogBox(QDialog):
                     self.label.setText(self.current_text)
                 
                 # 调整对话框大小
-                text_height = self.label.heightForWidth(self.config.min_width - 40)
-                new_height = self.get_adjusted_total_height(text_height)
-                
-                if new_height > self.current_height:
-                    self.size_animation.setStartValue(self.geometry())
-                    new_rect = QRect(self.x(), self.y(), self.width(), new_height)
-                    self.size_animation.setEndValue(new_rect)
-                    self.size_animation.start()
-                    self.current_height = new_height
-            
+                self.resize_dialog()
+
             # 允许拖动对话框
             if self.config.draggable:
                 self.old_pos = event.globalPos()
