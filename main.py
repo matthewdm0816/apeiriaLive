@@ -351,6 +351,10 @@ class AnimeCharacter(QMainWindow, HotkeyExitMixin):
         # 如果对话框底部超出屏幕，向上调整
         if dialog_y + self.dialog.height() > self.screen_geometry.height():
             dialog_y = self.screen_geometry.height() - self.dialog.height()
+
+        # 如果顶部超出屏幕，向下调整
+        if dialog_y < 0:
+            dialog_y = 0
         
         # 如果左侧也放不下（立绘靠近左边缘），则放在立绘上方或下方
         if dialog_x < 0:

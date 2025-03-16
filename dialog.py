@@ -25,38 +25,32 @@ APEIRIA_DIALOGUES: List[str] = [
 ]
 
 class DialogBoxConfig:
-    ...
-
-
-
-class DialogBox(QDialog):
-    """旧式Windows风格的角色对话框，带有逐字显示效果"""
-    def __init__(self, parent=None, text="你好！我是Apeiria！"):
-        super().__init__(parent, Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
+    """对话框配置类，用于集中管理DialogBox的所有配置参数"""
+    def __init__(self):
+        # 基本尺寸配置
+        self.min_width = 300
+        self.min_height = 100
+        self.max_width = 400
+        self.padding = 15
+        self.corner_size = 10  # 斜角大小
         
-        # 设置无边框和透明背景
-        self.setAttribute(Qt.WA_TranslucentBackground)
+        # 颜色配置
+        self.background_color = "#d4d0c8"  # 旧式Windows灰色
+        self.border_dark_color = "#404040"  # 深灰色边框
+        self.border_light_color = "#ffffff"  # 白色边框
+        self.border_medium_color = "#808080"  # 中灰色
+        self.text_color = "#000000"
+        self.title_color = "#000000"
         
-        # 创建主布局
-        self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(15, 15, 15, 15)  # 留出空间绘制边框和阴影
+        # 阴影配置
+        self.shadow_enabled = True
+        self.shadow_blur_radius = 15
+        self.shadow_color = QColor(0, 0, 0, 180)
+        self.shadow_offset_x = 5
+        self.shadow_offset_y = 5
         
-        # 创建文本标签
-        self.label = QLabel("")
-        self.label.setWordWrap(True)
-        self.label.setStyleSheet("""
-            font-family: 'Microsoft YaHei', 'SimSun', Arial; 
-            font-size: 14px; 
-            color: #000000; 
-            background-color: transparent;
-            padding: 5px;
-        """)
-        self.layout.addWidget(self.label)
-        
-        # 关闭按钮
-        self.close_button = QPushButton("关闭")
-        self.close_button.clicked.connect(self.close)
-        self.close_button.setStyleSheet("""
+        # 按钮样式
+        self.button_style = """
             QPushButton {
                 background-color: #d4d0c8; 
                 color: black;
@@ -83,44 +77,108 @@ class DialogBox(QDialog):
                 border-bottom-color: #ffffff;
                 background-color: #c0c0c0;
             }
-        """)
-        self.close_button.setFixedHeight(25)
+        """
+        
+        # 文本样式
+        self.text_style = """
+            font-family: 'Microsoft YaHei', 'SimSun', Arial; 
+            font-size: 14px; 
+            color: #000000; 
+            background-color: transparent;
+            padding: 5px;
+        """
+        
+        # 动画配置
+        self.text_animation_speed = 30  # 毫秒/字符
+        self.cursor_blink_interval = 500  # 光标闪烁间隔(毫秒)
+        self.size_animation_duration = 200  # 大小变化动画持续时间(毫秒)
+        
+        # 光标配置
+        self.cursor_char = "▌"  # 光标字符
+        self.cursor_enabled = True
+        
+        # 标题配置
+        self.title = "Apeiria"
+        self.title_height = 30
+        self.title_font = "Microsoft YaHei"
+        self.title_font_size = 10
+
+        # 内容区域配置
+        self.content_top_margin = 35  # 内容区域顶部边距，确保不与标题重叠
+
+        # 关闭按钮配置
+        self.close_button_height = 25
+        
+        # 行为配置
+        self.draggable = True
+        self.click_to_complete_text = True
+        self.close_button_text = "关闭"
+
+
+class DialogBox(QDialog):
+    """可配置的旧式Windows风格对话框，带有逐字显示效果"""
+    def __init__(self, parent=None, text="你好！我是Apeiria！", config=None):
+        super().__init__(parent, Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
+        
+        # 使用默认配置或传入的配置
+        self.config = config if config else DialogBoxConfig()
+        
+        # 设置无边框和透明背景
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        
+        # 创建主布局
+        self.layout = QVBoxLayout(self)
+        # 增加上边距，避免文本与标题重叠
+        self.layout.setContentsMargins(self.config.padding, 
+                                    #   self.config.padding + self.config.title_height + 5, 
+                                      self.config.padding + 5,
+                                      self.config.padding, 
+                                      self.config.padding)
+        
+        # 创建文本标签
+        self.label = QLabel("", self)
+        self.label.setWordWrap(True)
+        self.label.setStyleSheet(self.config.text_style)
+        self.layout.addWidget(self.label)
+        
+        # 关闭按钮
+        self.close_button = QPushButton(self.config.close_button_text)
+        self.close_button.clicked.connect(self.close)
+        self.close_button.setStyleSheet(self.config.button_style)
+        self.close_button.setFixedHeight(self.config.close_button_height)
         self.layout.addWidget(self.close_button)
         
         # 设置阴影效果
-        shadow = QGraphicsDropShadowEffect()
-        shadow.setBlurRadius(15)
-        shadow.setColor(QColor(0, 0, 0, 180))
-        shadow.setOffset(5, 5)
-        self.setGraphicsEffect(shadow)
+        if self.config.shadow_enabled:
+            shadow = QGraphicsDropShadowEffect()
+            shadow.setBlurRadius(self.config.shadow_blur_radius)
+            shadow.setColor(self.config.shadow_color)
+            shadow.setOffset(self.config.shadow_offset_x, self.config.shadow_offset_y)
+            self.setGraphicsEffect(shadow)
         
         # 文字动画相关变量
         self.full_text = text
         self.current_text = ""
         self.cursor_visible = True
-        self.cursor_char = "▌"  # 光标字符
         self.char_index = 0
-        self.animation_speed = 20  # 毫秒/字符
         
         # 设置计时器用于文字动画
         self.text_timer = QTimer(self)
         self.text_timer.timeout.connect(self.update_text)
         
         # 设置计时器用于光标闪烁
-        self.cursor_timer = QTimer(self)
-        self.cursor_timer.timeout.connect(self.toggle_cursor)
-        self.cursor_timer.start(500)  # 每500毫秒闪烁一次
+        if self.config.cursor_enabled:
+            self.cursor_timer = QTimer(self)
+            self.cursor_timer.timeout.connect(self.toggle_cursor)
+            self.cursor_timer.start(self.config.cursor_blink_interval)
         
         # 对话框大小动画
         self.size_animation = QPropertyAnimation(self, b"geometry")
-        self.size_animation.setDuration(200)  # 200毫秒
+        self.size_animation.setDuration(self.config.size_animation_duration)
         
-        # 初始大小
-        self.min_width = 300
-        self.min_height = 100
-        self.max_width = 400
-        self.current_height = self.min_height
-        self.resize(self.min_width, self.min_height)
+        # 初始大小 - 增加高度以适应标题栏
+        self.current_height = self.config.min_height # + self.config.title_height + 10
+        self.resize(self.config.min_width, self.current_height)
         
         # 开始文字动画
         self.setText(text)
@@ -135,47 +193,50 @@ class DialogBox(QDialog):
         rect = self.rect().adjusted(5, 5, -5, -5)  # 留出空间给阴影
         
         # 创建斜角矩形路径
-        corner_size = 10
-        path.moveTo(rect.left() + corner_size, rect.top())
-        path.lineTo(rect.right() - corner_size, rect.top())
-        path.lineTo(rect.right(), rect.top() + corner_size)
-        path.lineTo(rect.right(), rect.bottom() - corner_size)
-        path.lineTo(rect.right() - corner_size, rect.bottom())
-        path.lineTo(rect.left() + corner_size, rect.bottom())
-        path.lineTo(rect.left(), rect.bottom() - corner_size)
-        path.lineTo(rect.left(), rect.top() + corner_size)
+        corner = self.config.corner_size
+        path.moveTo(rect.left() + corner, rect.top())
+        path.lineTo(rect.right() - corner, rect.top())
+        path.lineTo(rect.right(), rect.top() + corner)
+        path.lineTo(rect.right(), rect.bottom() - corner)
+        path.lineTo(rect.right() - corner, rect.bottom())
+        path.lineTo(rect.left() + corner, rect.bottom())
+        path.lineTo(rect.left(), rect.bottom() - corner)
+        path.lineTo(rect.left(), rect.top() + corner)
         path.closeSubpath()
         
         # 填充背景色
-        painter.setBrush(QBrush(QColor("#d4d0c8")))  # 旧式Windows灰色
+        painter.setBrush(QBrush(QColor(self.config.background_color)))
         painter.setPen(Qt.NoPen)
         painter.drawPath(path)
         
         # 绘制3D效果边框
         # 外边框
-        painter.setPen(QPen(QColor("#404040"), 1))  # 深灰色
-        painter.drawLine(rect.left(), rect.bottom() - corner_size, 
-                        rect.left(), rect.top() + corner_size)
-        painter.drawLine(rect.left() + corner_size, rect.top(), 
-                        rect.right() - corner_size, rect.top())
+        painter.setPen(QPen(QColor(self.config.border_dark_color), 1))
+        painter.drawLine(rect.left(), rect.bottom() - corner, 
+                        rect.left(), rect.top() + corner)
+        painter.drawLine(rect.left() + corner, rect.top(), 
+                        rect.right() - corner, rect.top())
         
-        painter.setPen(QPen(QColor("#ffffff"), 1))  # 白色
-        painter.drawLine(rect.right(), rect.top() + corner_size, 
-                        rect.right(), rect.bottom() - corner_size)
-        painter.drawLine(rect.left() + corner_size, rect.bottom(), 
-                        rect.right() - corner_size, rect.bottom())
+        painter.setPen(QPen(QColor(self.config.border_light_color), 1))
+        painter.drawLine(rect.right(), rect.top() + corner, 
+                        rect.right(), rect.bottom() - corner)
+        painter.drawLine(rect.left() + corner, rect.bottom(), 
+                        rect.right() - corner, rect.bottom())
         
         # 内边框（标题栏分隔线）
-        title_height = 25
-        painter.setPen(QPen(QColor("#808080"), 1))
-        painter.drawLine(rect.left() + 5, rect.top() + title_height, 
-                        rect.right() - 5, rect.top() + title_height)
+        painter.setPen(QPen(QColor(self.config.border_medium_color), 1))
+        painter.drawLine(rect.left() + 5, rect.top() + self.config.title_height, 
+                        rect.right() - 5, rect.top() + self.config.title_height)
         
         # 绘制标题
-        painter.setPen(QPen(QColor("#000000"), 1))
+        painter.setPen(QPen(QColor(self.config.title_color), 1))
+        font = painter.font()
+        font.setFamily(self.config.title_font)
+        font.setPointSize(self.config.title_font_size)
+        painter.setFont(font)
         painter.drawText(rect.left() + 15, rect.top() + 5, 
-                        rect.width() - 30, title_height - 5, 
-                        Qt.AlignLeft | Qt.AlignVCenter, "Apeiria")
+                        rect.width() - 30, self.config.title_height - 5, 
+                        Qt.AlignLeft | Qt.AlignVCenter, self.config.title)
     
     def setText(self, text):
         """设置要显示的文本并开始动画"""
@@ -186,12 +247,18 @@ class DialogBox(QDialog):
         # 停止之前的动画
         self.text_timer.stop()
         
-        # 重置对话框大小
-        self.resize(self.min_width, self.min_height)
-        self.current_height = self.min_height
+        # 重置对话框大小 - 考虑标题栏高度
+        initial_height = self.config.min_height # + self.config.title_height + 10
+        self.resize(self.config.min_width, initial_height)
+        self.current_height = initial_height
         
         # 开始新的动画
-        self.text_timer.start(self.animation_speed)
+        self.text_timer.start(self.config.text_animation_speed)
+
+    def get_adjusted_total_height(self, text_height: int) -> int:
+        """获取调整后的总高度"""
+        total_height = text_height + self.config.title_height + self.close_button.height() + 10
+        return max(self.config.min_height + self.config.title_height + 10, total_height)
     
     def update_text(self):
         """更新文本显示，逐字添加"""
@@ -200,14 +267,18 @@ class DialogBox(QDialog):
             self.char_index += 1
             
             # 更新标签文本（带光标）
-            if self.cursor_visible:
-                self.label.setText(self.current_text + self.cursor_char)
+            if self.config.cursor_enabled:
+                if self.cursor_visible:
+                    self.label.setText(self.current_text + self.config.cursor_char)
+                else:
+                    self.label.setText(self.current_text)
             else:
                 self.label.setText(self.current_text)
             
             # 根据文本长度调整对话框高度
-            text_height = self.label.heightForWidth(self.min_width - 40) + 70  # 额外空间给按钮和边距
-            new_height = max(self.min_height, text_height)
+            # 计算文本所需高度
+            text_height = self.label.heightForWidth(self.config.min_width - 40)
+            new_height = self.get_adjusted_total_height(text_height)
             
             if new_height > self.current_height:
                 # 动画调整对话框大小
@@ -222,19 +293,22 @@ class DialogBox(QDialog):
     
     def toggle_cursor(self):
         """切换光标可见性"""
+        if not self.config.cursor_enabled:
+            return
+            
         self.cursor_visible = not self.cursor_visible
         
         # 如果文字动画已经结束，手动更新光标
         if self.char_index >= len(self.full_text):
             if self.cursor_visible:
-                self.label.setText(self.current_text + self.cursor_char)
+                self.label.setText(self.current_text + self.config.cursor_char)
             else:
                 self.label.setText(self.current_text)
     
     def speak(self, text, voice_file=None):
         """文本转语音功能（未来扩展）"""
         self.setText(text)
-        # 未来实现: TODO 添加TTS功能
+        # 未来实现: 添加TTS功能
         if voice_file:
             print(f"播放语音: {voice_file}")
         else:
@@ -244,18 +318,22 @@ class DialogBox(QDialog):
         """点击对话框时处理"""
         if event.button() == Qt.LeftButton:
             # 如果动画正在进行，点击时直接显示全部文字
-            if self.text_timer.isActive():
+            if self.config.click_to_complete_text and self.text_timer.isActive():
                 self.text_timer.stop()
                 self.current_text = self.full_text
                 self.char_index = len(self.full_text)
-                if self.cursor_visible:
-                    self.label.setText(self.current_text + self.cursor_char)
+                
+                if self.config.cursor_enabled:
+                    if self.cursor_visible:
+                        self.label.setText(self.current_text + self.config.cursor_char)
+                    else:
+                        self.label.setText(self.current_text)
                 else:
                     self.label.setText(self.current_text)
                 
                 # 调整对话框大小
-                text_height = self.label.heightForWidth(self.min_width - 40) + 70
-                new_height = max(self.min_height, text_height)
+                text_height = self.label.heightForWidth(self.config.min_width - 40)
+                new_height = self.get_adjusted_total_height(text_height)
                 
                 if new_height > self.current_height:
                     self.size_animation.setStartValue(self.geometry())
@@ -265,15 +343,149 @@ class DialogBox(QDialog):
                     self.current_height = new_height
             
             # 允许拖动对话框
-            self.old_pos = event.globalPos()
+            if self.config.draggable:
+                self.old_pos = event.globalPos()
         
         super().mousePressEvent(event)
     
     def mouseMoveEvent(self, event):
         """拖动对话框"""
-        if hasattr(self, 'old_pos'):
+        if self.config.draggable and hasattr(self, 'old_pos'):
             delta = event.globalPos() - self.old_pos
             self.move(self.x() + delta.x(), self.y() + delta.y())
             self.old_pos = event.globalPos()
         
         super().mouseMoveEvent(event)
+    
+    # 解决setLayout(None)问题的方法
+    def clearLayout(self):
+        """清除布局中的所有部件"""
+        if self.layout is not None:
+            while self.layout.count():
+                item = self.layout.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    widget.setParent(None)
+
+
+# 使用示例
+def create_dialog(parent=None, text="你好！我是Apeiria！", style="windows_classic"):
+    """创建预设样式的对话框"""
+    config = DialogBoxConfig()
+    
+    if style == "windows_classic":
+        # 默认配置已经是Windows经典样式
+        pass
+    elif style == "windows_xp":
+        # Windows XP风格
+        config.background_color = "#ECE9D8"
+        config.border_dark_color = "#0054E3"
+        config.border_light_color = "#B9D1EA"
+        config.border_medium_color = "#7DA2CE"
+        config.title_color = "#FFFFFF"
+        config.button_style = """
+            QPushButton {
+                background-color: #ECE9D8; 
+                color: black;
+                border: 2px solid #7DA2CE;
+                border-style: outset;
+                border-width: 2px;
+                border-top-color: #FFFFFF;
+                border-left-color: #FFFFFF;
+                border-right-color: #0054E3;
+                border-bottom-color: #0054E3;
+                padding: 3px;
+                font-family: 'Tahoma', 'Arial';
+                font-size: 12px;
+                min-width: 60px;
+            }
+            QPushButton:hover {
+                background-color: #F2F1E8;
+            }
+            QPushButton:pressed {
+                border-style: inset;
+                border-top-color: #0054E3;
+                border-left-color: #0054E3;
+                border-right-color: #FFFFFF;
+                border-bottom-color: #FFFFFF;
+                background-color: #DCD8C0;
+            }
+        """
+    elif style == "modern":
+        # 现代风格
+        config.background_color = "#FFFFFF"
+        config.border_dark_color = "#CCCCCC"
+        config.border_light_color = "#EEEEEE"
+        config.border_medium_color = "#DDDDDD"
+        config.title_color = "#333333"
+        config.shadow_blur_radius = 20
+        config.shadow_color = QColor(0, 0, 0, 100)
+        config.corner_size = 15
+        config.button_style = """
+            QPushButton {
+                background-color: #4285F4; 
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 6px;
+                font-family: 'Segoe UI', 'Arial';
+                font-size: 12px;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background-color: #5294FF;
+            }
+            QPushButton:pressed {
+                background-color: #3275E4;
+            }
+        """
+        config.text_style = """
+            font-family: 'Segoe UI', 'Microsoft YaHei', Arial; 
+            font-size: 14px; 
+            color: #333333; 
+            background-color: transparent;
+            padding: 8px;
+        """
+    elif style == "dark":
+        # 暗色主题
+        config.background_color = "#2D2D30"
+        config.border_dark_color = "#1E1E1E"
+        config.border_light_color = "#3F3F46"
+        config.border_medium_color = "#333337"
+        config.title_color = "#FFFFFF"
+        config.text_color = "#FFFFFF"
+        config.shadow_blur_radius = 25
+        config.shadow_color = QColor(0, 0, 0, 200)
+        config.button_style = """
+            QPushButton {
+                background-color: #007ACC; 
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 6px;
+                font-family: 'Segoe UI', 'Arial';
+                font-size: 12px;
+                min-width: 80px;
+            }
+            QPushButton:hover {
+                background-color: #1C8ADB;
+            }
+            QPushButton:pressed {
+                background-color: #006BB3;
+            }
+        """
+        config.text_style = """
+            font-family: 'Segoe UI', 'Microsoft YaHei', Arial; 
+            font-size: 14px; 
+            color: #FFFFFF; 
+            background-color: transparent;
+            padding: 8px;
+        """
+        config.cursor_char = "█"
+
+    elif style == "love":
+        config = DialogBoxConfig()
+        config.background_color = "#FFE4E1"  # 粉色背景
+        config.cursor_char = "❤"  # 心形光标
+    
+    return DialogBox(parent, text, config)
