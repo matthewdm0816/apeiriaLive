@@ -53,7 +53,7 @@ class TachieManager:
         
         # 找出所有基础姿势, CH01_01_00+(normal|positive|negative).png
         # base_files = [file for file in files if "+" in file]
-        pattern = rf"{self.base_image_name}+.*.png"
+        pattern = rf"{self.base_image_name}\+.*\.png"
         base_files = [file for file in files if re.match(pattern, file)]
         for file in base_files:
             base_name = file.split(".")[0].split("+")[-1]
@@ -66,7 +66,7 @@ class TachieManager:
             # base_prefix = base.rsplit("_", 1)[0]  
             # emotion_files = [f for f in files if f.startswith(f"{base_prefix}_") and "_" in f.split("_", 2)[2]]
             # 找出所有基础姿势, CH01_01_00_(害羞|高兴).png
-            pattern = rf"{self.base_image_name}_.*.png"
+            pattern = rf"{self.base_image_name}_.*\.png"
             emotion_files = [file for file in files if re.match(pattern, file)]
 
             emotions = []
@@ -76,7 +76,9 @@ class TachieManager:
             
             self.available_emotions[base] = emotions
             
-        print(f"已加载 {len(self.available_bases)} 个基础姿势, {len(self.available_emotions)} 个表情")
+        print(f"已加载 {len(self.available_bases)} 个基础姿势, {[len(emotions) for emotions in self.available_emotions.values()]} 个表情差分")
+        print(f"可用基础姿势: {self.available_bases}")
+        print(f"可用表情: {self.available_emotions}")
         
     def get_base_image_path(self, base_name=None):
         """获取基础姿势图像的路径"""

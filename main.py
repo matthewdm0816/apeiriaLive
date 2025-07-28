@@ -5,11 +5,16 @@ import logging
 import re 
 import random 
 from typing import List, Dict, Any, Union, Tuple, Optional, Callable 
+import asyncio
+import threading
+from mcp.server.fastmcp import FastMCP
+import json
 
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QLabel, QVBoxLayout, QWidget, 
                              QDialog, QPushButton, QMenu, QGraphicsDropShadowEffect) 
 from PyQt5.QtCore import Qt, QPropertyAnimation, QRect, QTimer, QSize, QPoint, QParallelAnimationGroup, QEasingCurve
 from PyQt5.QtGui import QMovie, QPixmap, QPainter, QTransform, QColor 
+from PyQt5.QtCore import pyqtSignal 
 
 import keyboard
 
@@ -36,8 +41,22 @@ class HotkeyExitMixin:
 
 
 class AnimeCharacter(QMainWindow, HotkeyExitMixin):
+    # 新增：定义一个信号，它能携带一个字符串参数（我们要显示的消息）
+    # 这是实现线程安全通信的关键！
+    mcp_command_received = pyqtSignal(str, str, str)
+
     def __init__(self, tachie_manager_name="apeiria", window_size=(300, 500)):
         super().__init__()
+
+        # 2. 初始化并配置MCP服务器
+        self.mcp_server = FastMCP("apeiria_desktop_companion_server")
+        # 直接在这里设置服务器的地址和端口
+        self.mcp_server.settings.host = "127.0.0.1"
+        self.mcp_server.settings.port = 27890
+
+        # 3. 设置MCP的工具
+        self._setup_mcp_tools()
+
         self.NORMAL = "normal"
         self.DRAGGING = "dragging"
         self.COLLAPSED = "collapsed"
@@ -92,6 +111,97 @@ class AnimeCharacter(QMainWindow, HotkeyExitMixin):
         self.pomodoro_timer_dialog: Optional[PomodoroTimerDialog] = None
 
         self.setup_hotkeys()
+
+        # 4. 连接信号到处理函数
+        self.mcp_command_received.connect(self.handle_mcp_command)
+
+        # 5. 创建并启动后台线程
+        self.mcp_thread = threading.Thread(target=self._start_mcp_server_in_thread, daemon=True)
+        self.mcp_thread.start()
+
+    def _setup_mcp_tools(self):
+        """设置所有提供给LLM的MCP工具。"""
+
+        # 工具一：【改名】从 get_available_appearances 改为 list_pet_appearances
+        @self.mcp_server.tool(
+                name="list_companion_appearances",
+                description="获取桌面宠物所有可用的姿势(base)和每个姿势对应的表情(emotion)列表。返回一个JSON格式的字符串。"
+                ) # <--- 在这里明确指定新的工具名
+        async def list_companion_appearances() -> str:
+            """
+            获取桌面宠物所有可用的姿势(base)和每个姿势对应的表情(emotion)列表。
+            返回一个JSON格式的字符串。
+            """
+            logger.info("[MCP Tool] 收到 list_companion_appearances 命令")
+            try:
+                bases = self.tachie_manager.get_available_bases()
+                appearances = {base: self.tachie_manager.get_available_emotions(base) for base in bases}
+                return json.dumps(appearances, ensure_ascii=False, indent=2)
+            except Exception as e:
+                logger.error(f"[MCP Tool] 获取外观列表时出错: {e}")
+                return f"获取可用外观列表时发生错误: {e}"
+
+        # 工具二：【改名】从 perform_action 改为 control_pet_action
+        @self.mcp_server.tool(
+                name="control_companion_action",
+                description="控制桌面宠物执行动作，可以包含说话、改变姿势(base)和改变表情(emotion)。所有参数都是可选的。"
+                ) # <--- 在这里明确指定新的工具名
+        async def control_companion_action(message: str = "", base: str = "", emotion: str = "") -> str:
+            """
+            控制桌面宠物执行动作，可以包含说话、改变姿势(base)和改变表情(emotion)。
+            所有参数都是可选的。
+            """
+            logger.info(f"[MCP Server] 收到 control_companion_action 命令")
+            self.mcp_command_received.emit(message, base, emotion)
+            return "动作指令已成功发送给桌面宠物执行。"
+        
+    
+    # 7. 这是后台线程要执行的函数 (【核心修正】)
+    #    这个函数现在变得非常简单！
+    def _start_mcp_server_in_thread(self):
+        """
+        在后台线程中，直接运行阻塞的MCP服务器。
+        """
+        try:
+            logger.info(f"MCP服务器后台线程准备启动，监听地址 http://{self.mcp_server.settings.host}:{self.mcp_server.settings.port}")
+            # 直接调用 run() 函数，它会阻塞这个线程，直到程序退出
+            self.mcp_server.run(transport='streamable-http')
+        except Exception as e:
+            # 如果服务器启动失败，记录错误
+            logger.error(f"MCP服务器后台线程启动失败或运行时发生错误: {e}", exc_info=True)
+
+    # 新增：这是响应信号的“槽”函数，它在主GUI线程中运行
+    # 替换旧的 handle_mcp_message 方法
+    def handle_mcp_command(self, message: str, base: str, emotion: str):
+        """
+        接收来自MCP服务器线程的统一命令，并调用核心对话框/外观显示函数。
+        """
+        logger.info(f"主线程收到MCP命令: Message='{message}', Base='{base}', Emotion='{emotion}'")
+
+        # 智能地调用 show_dialog_message
+        # 如果消息为空，它就只会改变姿势和表情，而不会弹出对话框（或者弹出一个空的）
+        # 我们可以根据 message 是否为空来决定是否显示对话框
+        if message:
+            self.show_dialog_message(
+                text=message,
+                base=base if base else None,      # 如果为空字符串则传递None
+                emotion=emotion if emotion else None, # 如果为空字符串则传递None
+                duration_ms=8000
+            )
+        else:
+            # 如果没有消息，就只改变外观
+            if base:
+                self.tachie_manager.set_base(base)
+            # 确保在设置表情前，姿势是正确的
+            current_base = self.tachie_manager.current_base
+            if emotion and emotion in self.tachie_manager.get_available_emotions(current_base):
+                self.set_emotion(emotion, duration_ms=5000) # 仅改变表情时，持续5秒
+            else:
+                self.update_character_display() # 如果只有base变化，也需要更新显示
+
+        # 将窗口置顶，确保用户能看到变化
+        self.activateWindow()
+        self.raise_()
 
     # ... (update_character_display, initialize_ui, set_emotion, reset_emotion as before, ensure robust) ...
     def update_character_display(self):
