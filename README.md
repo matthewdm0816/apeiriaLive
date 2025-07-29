@@ -25,7 +25,8 @@
 2. 安装所需依赖：
 
 ```bash
-pip install PyQt5 keyboard opencv-python
+pip install uv
+uv pip install PyQt5 keyboard opencv-python "mcp[cli]" httpx
 ```
 
 3. 克隆或下载本仓库
@@ -37,7 +38,7 @@ python main.py
 
 ### 使用可执行文件
 
-我们提供了打包好的可执行文件，可以直接下载并运行：
+我们提供了打包好的可执行文件，可以直接下载并运行：(但可能不是最新)
 
 1. 从[Releases](https://github.com/yourusername/apeiria-desktop/releases)页面下载最新版本
 2. 解压缩下载的文件
@@ -54,10 +55,20 @@ python main.py
 
 您可以通过修改`images/apeiria`目录中的图像文件来自定义角色外观：
 
-- 基础姿势图像：`CH01_01_00.png`、`CH01_01_01_negative.png`、`CH01_01_02_positive.png`等
+- 基础姿势图像：`CH01_01_00+normal.png`、`CH01_01_00+negative.png`、`CH01_01_00+positive.png`等
 - 表情差分图像：`CH01_01_00_脸红.png`、`CH01_01_00_惊讶-好奇.png`等
 
 图像格式应为带有透明通道的PNG文件。
+
+## MCP Server
+
+桌面虚拟角色支持MCP弹出对话框和切换表情/姿势差分. 使用方法: 启动桌宠后会在`http://127.0.0.1:27890/mcp`地址监听MCP请求. 目前实现的tools:
+- `list_companion_appearances` - 返回可用的姿势和表情差分
+- `control_companion_action` - 控制虚拟角色的动作
+    - Required Arguments: 
+        - `message`: 要说的话 (可选)
+        - `base`: 姿势名称 (可选)
+        - `emotion`: 表情名称 (可选)
 
 ## 开发者信息
 
